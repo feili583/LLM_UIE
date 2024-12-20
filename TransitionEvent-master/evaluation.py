@@ -118,6 +118,7 @@ class Buffer(object):
         '''
 
         self.hidden_states = hidden_state_list
+        print(hidden_state_list)
         self.seq_len = len(hidden_state_list)
         self.idx = 0
 
@@ -172,6 +173,8 @@ class ShiftReduce(object):
         self.no_pass = 'NO-PASS'
         self.left_pass = 'LEFT-PASS'
         self.right_pass = 'RIGHT-PASS'
+        self.left_relate = 'LEFT-RELATE'
+        self.right_relate = 'RIGHT-RELATE'
 
         self.back_shift = 'DUAL-SHIFT'
         # ------------------------------
@@ -222,8 +225,10 @@ class ShiftReduce(object):
         args = []
         buffer = Buffer(sentence)
         pred_action_strs = []
+        relations = []
 
         for action in actions:
+            # print(ent_dic, tri_dic, args, relations, buffer)
             if action == self.o_delete:
                 idx = buffer.pop()
 
@@ -286,6 +291,7 @@ class ShiftReduce(object):
                 args.append(event)
 
                 self.delta_rnn.append(sigma_last_idx)
+            
 
 
             elif self.right_pass in action:
@@ -301,10 +307,40 @@ class ShiftReduce(object):
 
                 self.delta_rnn.append(sigma_last_idx)
 
+            elif self.left_relate in action:
+                lmda_idx = self.lambda_var.idx
+                sigma_last_idx = self.sigma_rnn.pop()
+                tri_idx = lmda_idx
+                ent_start, ent_end, _ = ent_dic[sigma_last_idx]
+                ent_start_, ent_end_, _ = ent_dic[tri_idx]
+
+                role_label = action.split('-')[-1]
+                relation = (ent_start, ent_end, ent_start_, ent_end_, role_label)
+                relations.append(relation)
+
+                self.delta_rnn.append(sigma_last_idx)
+            
+
+
+            elif self.right_relate in action:
+                lmda_idx = self.lambda_var.idx
+                sigma_last_idx = self.sigma_rnn.pop()
+                tri_idx = sigma_last_idx
+                ent_start, ent_end, _ = ent_dic[lmda_idx]
+                ent_start_, ent_end_, _ = ent_dic[tri_idx]
+
+                role_label = action.split('-')[-1]
+
+                relation = (ent_start, ent_end, ent_start_, ent_end_, role_label)
+                relations.append(relation)
+
+                self.delta_rnn.append(sigma_last_idx)
+
             else:
                 raise RuntimeError('Unknown action type:'+str(action))
 
         pred_args = args
+        pred_relations = relations
         # for arg in args:
         #     ent_start, ent_end, tri_idx, role_type = arg
         #     ent_type_id = ent_dic[ent_start][-1]
@@ -313,7 +349,7 @@ class ShiftReduce(object):
         #     if valid_args and role_type in valid_args:
         #         pred_args.append(arg)
 
-        return set(ent_dic.values()), set(tri_dic.values()), pred_args
+        return set(ent_dic.values()), set(tri_dic.values()), pred_args, pred_relations
 
 class evaluater(object):
     def __init__(self):
@@ -356,10 +392,12 @@ if __name__ == '__main__':
     ]
     # states = ["O-DELETE", "O-DELETE", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-GEN-G#protein", "ENTITY-BACK", "SHIFT", "O-DELETE", "O-DELETE", "O-DELETE", "O-DELETE", "O-DELETE", "O-DELETE", "O-DELETE", "O-DELETE", "O-DELETE", "O-DELETE", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-GEN-G#DNA", "ENTITY-BACK", "NO-PASS", "SHIFT", "O-DELETE", "O-DELETE", "O-DELETE", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-GEN-G#DNA", "ENTITY-BACK", "NO-PASS", "NO-PASS", "SHIFT", "O-DELETE", "O-DELETE", "O-DELETE", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-SHIFT", "ENTITY-GEN-G#DNA", "ENTITY-BACK", "NO-PASS", "NO-PASS", "NO-PASS", "SHIFT", "O-DELETE", "O-DELETE", "O-DELETE"]
     # role_labels = ['Defendant', 'Sentence']
-    sentence= "LOS ANGELES , April 18 ( AFP )"
-    states= "{\"actions\": [\"ENTITY-SHIFT\", \"ENTITY-SHIFT\", \"ENTITY-GEN-GPE\", \"ENTITY-BACK\", \"SHIFT\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"ENTITY-SHIFT\", \"ENTITY-GEN-ORG\", \"ENTITY-BACK\", \"NO-PASS\", \"SHIFT\", \"O-DELETE\"]}"
-    # entities, triggers, args  = evaluation.shift_reduce(json.loads(states)['actions'], sentence)
-    # print(entities, triggers, args)
+    # sentence= "LOS ANGELES , April 18 ( AFP )"
+    # states= "{\"actions\": [\"ENTITY-SHIFT\", \"ENTITY-SHIFT\", \"ENTITY-GEN-GPE\", \"ENTITY-BACK\", \"SHIFT\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"ENTITY-SHIFT\", \"ENTITY-GEN-ORG\", \"ENTITY-BACK\", \"NO-PASS\", \"SHIFT\", \"O-DELETE\"]}"
+    sentence = "Best - selling novelist and \" Jurassic Park \" creator Michael Crichton has agreed to pay his fourth wife 31 million dollars as part of their divorce settlement , court documents showed Friday ."
+    states = "{\"actions\": [\"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"ENTITY-SHIFT\", \"ENTITY-GEN-PER\", \"ENTITY-BACK\", \"SHIFT\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"ENTITY-SHIFT\", \"ENTITY-GEN-PER\", \"ENTITY-BACK\", \"NO-PASS\", \"SHIFT\", \"ENTITY-SHIFT\", \"ENTITY-SHIFT\", \"ENTITY-GEN-PER\", \"ENTITY-BACK\", \"NO-PASS\", \"NO-PASS\", \"SHIFT\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"TRIGGER-GEN-Transaction:Transfer-Money\", \"LEFT-PASS-Giver\", \"NO-PASS\", \"NO-PASS\", \"SHIFT\", \"ENTITY-SHIFT\", \"ENTITY-GEN-PER\", \"ENTITY-BACK\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"SHIFT\", \"O-DELETE\", \"ENTITY-SHIFT\", \"ENTITY-GEN-PER\", \"ENTITY-BACK\", \"RIGHT-RELATE-PER-SOC:Family\", \"RIGHT-PASS-Recipient\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"SHIFT\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"ENTITY-SHIFT\", \"ENTITY-GEN-PER\", \"ENTITY-BACK\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"SHIFT\", \"TRIGGER-GEN-Life:Divorce\", \"LEFT-PASS-Person\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"SHIFT\", \"O-DELETE\", \"O-DELETE\", \"ENTITY-SHIFT\", \"ENTITY-GEN-ORG\", \"ENTITY-BACK\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"NO-PASS\", \"SHIFT\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\", \"O-DELETE\"]}"
+    entities, triggers, args, relations  = evaluation.shift_reduce(json.loads(states)['actions'], sentence)
+    print(entities, triggers, args, relations)
     '''
     {"prompt": "[INST] Would you be able to identify the two entities described in the text and specify their connection?\n{\"ent\": [\"opinion\", \"aspect\"], \"rel\": [\"negative\", \"neutral\", \"positive\"], \"event\": {}}\nBoot time is super fast , around anywhere from 35 seconds to 1 minute . [/INST]", 
     "label": "{\"ent\": [{\"type\": \"aspect\", \"text\": \"Boot time\", \"span\": [0, 9]}, {\"type\": \"opinion\", \"text\": \"fast\", \"span\": [18, 22]}], \"rel\": [{\"relation\": \"positive\", \"head\": {\"text\": \"Boot time\", \"span\": [0, 9]}, \"tail\": {\"text\": \"fast\", \"span\": [18, 22]}}], \"event\": []}", 
@@ -371,78 +409,78 @@ if __name__ == '__main__':
     "predict": "{\"ent\": [{\"type\": \"organization\", \"text\": \"UConn Health\", \"span\": [32, 44]}, {\"type\": \"time\", \"text\": \"Dec 24 , 2018\", \"span\": [58, 71]}, {\"type\": \"personally identifiable information\", \"text\": \"employee email accounts\", \"span\": [161, 185]}, {\"type\": \"personally identifiable information\", \"text\": \"patient information\", \"span\": [191, 209]}, {\"type\": \"personally identifiable information\", \"text\": \"billing and appointment information\", \"span\": [326, 366]}, {\"type\": \"personally identifiable information\", \"text\": \"appointment information\", \"span\": [370, 394]}, {\"type\": \"person\", \"text\": \"individuals\", \"span\": [241, 252]}, {\"type\": \"person\", \"text\": \"some individuals\", \"span\": [255, 271]}], \"rel\": [], \"event\": [{\"event_type\": \"databreach\", \"trigger\": {\"text\": \"illegally accessed\", \"span\": [122, 139]}, \"args\": [{\"role\": \"victim\", \"text\": \"UConn Health\", \"span\": [32, 44]}, {\"role\": \"time\", \"text\": \"Dec 24 , 2018\", \"span\": [58, 71]}, {\"role\": \"compromised data\", \"text\": \"employee email accounts\", \"span\": [161, 185]}, {\"role\": \"compromised data\", \"text\": \"patient information\", \"span\": [191, 209]}, {\"role\": \"compromised data\", \"text\": \"billing and appointment information\", \"span\": [326, 366]}, {\"role\": \"compromised data\", \"text\": \"appointment information\", \"span\": [370, 394]}, {\"role\": \"victim\", \"text\": \"individuals\", \"span\": [241, 252]}, {\"role\": \"victim\", \"text\": \"some individuals\", \"span\": [255, 271]}]}]}"}
 
     '''
-    # print(triggers, args)
-    # paths = ['/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/ace_add_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/ace2004_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/casie_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/conll03_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/genia_test/generated_predictions.jsonl']
-    # paths = ['/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/ace_add_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/ace2004_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/casie_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/conll03_test/generated_predictions.jsonl', \
-    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/genia_test/generated_predictions.jsonl']
-    paths = ['/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/ace_add_test/generated_predictions.jsonl', \
-        '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/ace2004_test/generated_predictions.jsonl', \
-        '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/casie_test/generated_predictions.jsonl', \
-        '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/conll03_test/generated_predictions.jsonl', \
-        '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/genia_test/generated_predictions.jsonl']
-    for path in paths:
-        with open(path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            all_datas = []
-            for line in lines:
-                line = json.loads(line)
-                all_data = dict()
-                all_data['prompt'] = line['prompt']
-                all_data['actions'] = json.loads(line['label'])['actions']
-                all_data['predict_actions'] = line['predict']
-                all_data['predict'] = dict()
-                all_data['label'] = dict()
-                all_data['label']['ent'] = []
-                all_data['label']['rel'] = []
-                all_data['label']['event'] = []
-                all_data['predict']['ent'] = []
-                all_data['predict']['rel'] = []
-                all_data['predict']['event'] = []
-                sentence = line['prompt'].split('\n\n\n')[-1].replace(' [/INST]', '')
+    # # print(triggers, args)
+    # # paths = ['/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/ace_add_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/ace2004_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/casie_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/conll03_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2/genia_test/generated_predictions.jsonl']
+    # # paths = ['/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/ace_add_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/ace2004_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/casie_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/conll03_test/generated_predictions.jsonl', \
+    # #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.2/genia_test/generated_predictions.jsonl']
+    # paths = ['/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/ace_add_test/generated_predictions.jsonl', \
+    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/ace2004_test/generated_predictions.jsonl', \
+    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/casie_test/generated_predictions.jsonl', \
+    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/conll03_test/generated_predictions.jsonl', \
+    #     '/data/liuweichang/workspace/LLaMA-Factory-main/saves/llama2-7b/lora/predict_v2.3/genia_test/generated_predictions.jsonl']
+    # for path in paths:
+    #     with open(path, 'r', encoding='utf-8') as f:
+    #         lines = f.readlines()
+    #         all_datas = []
+    #         for line in lines:
+    #             line = json.loads(line)
+    #             all_data = dict()
+    #             all_data['prompt'] = line['prompt']
+    #             all_data['actions'] = json.loads(line['label'])['actions']
+    #             all_data['predict_actions'] = line['predict']
+    #             all_data['predict'] = dict()
+    #             all_data['label'] = dict()
+    #             all_data['label']['ent'] = []
+    #             all_data['label']['rel'] = []
+    #             all_data['label']['event'] = []
+    #             all_data['predict']['ent'] = []
+    #             all_data['predict']['rel'] = []
+    #             all_data['predict']['event'] = []
+    #             sentence = line['prompt'].split('\n\n\n')[-1].replace(' [/INST]', '')
 
-                entities, triggers, args = evaluation.shift_reduce(json.loads(line['label'])['actions'], sentence)
-                for entity in entities:
-                    all_data['label']['ent'].append({'type':entity[2], 'text':' '.join(sentence.split()[entity[0]:(entity[1]+1)]), 'span':[str(entity[0]), str(entity[1])]})
-                for trigger in triggers:
-                    tmp = dict()
-                    tmp['event_type'] = trigger[1]
-                    tmp['trigger'] = {'text':sentence.split()[trigger[0]], 'span':str(trigger[0])}
-                    tmp['args'] = []
-                    for arg in args:
-                        if trigger[0] == arg[2]:
-                            tmp['args'].append({'role':arg[-1], 'text':' '.join(sentence.split()[arg[0]:(arg[1] + 1)]), 'span':[str(arg[0]), str(arg[1])]})
-                    all_data['label']['event'].append(tmp)
+    #             entities, triggers, args = evaluation.shift_reduce(json.loads(line['label'])['actions'], sentence)
+    #             for entity in entities:
+    #                 all_data['label']['ent'].append({'type':entity[2], 'text':' '.join(sentence.split()[entity[0]:(entity[1]+1)]), 'span':[str(entity[0]), str(entity[1])]})
+    #             for trigger in triggers:
+    #                 tmp = dict()
+    #                 tmp['event_type'] = trigger[1]
+    #                 tmp['trigger'] = {'text':sentence.split()[trigger[0]], 'span':str(trigger[0])}
+    #                 tmp['args'] = []
+    #                 for arg in args:
+    #                     if trigger[0] == arg[2]:
+    #                         tmp['args'].append({'role':arg[-1], 'text':' '.join(sentence.split()[arg[0]:(arg[1] + 1)]), 'span':[str(arg[0]), str(arg[1])]})
+    #                 all_data['label']['event'].append(tmp)
                 
-                try:
-                    entities_pre, triggers_pre, args_pre = evaluation.shift_reduce(json.loads(line['predict'])['actions'], sentence)
-                except Exception as e:
-                    print(e)
-                    entities_pre, triggers_pre, args_pre =[], [], []
-                for entity in entities_pre:
-                    all_data['predict']['ent'].append({'type':entity[2], 'text':' '.join(sentence.split()[entity[0]:(entity[1]+1)]), 'span':[str(entity[0]), str(entity[1])]})
-                for trigger in triggers_pre:
-                    if trigger[0] >= len(sentence.split()):
-                        continue
-                    tmp = dict()
-                    tmp['event_type'] = trigger[1]
-                    tmp['trigger'] = {'text':sentence.split()[trigger[0]], 'span':str(trigger[0])}
-                    tmp['args'] = []
-                    for arg in args_pre:
-                        if trigger[0] == arg[2]:
-                            tmp['args'].append({'role':arg[-1], 'text':' '.join(sentence.split()[arg[0]:(arg[1] + 1)]), 'span':[str(arg[0]), str(arg[1])]})
-                    all_data['predict']['event'].append(tmp)
-                all_data['label'] = json.dumps(all_data['label'], ensure_ascii=False)
-                all_data['predict'] = json.dumps(all_data['predict'], ensure_ascii=False)
-                all_datas.append(all_data)
-                # print(all_data)
-                # stop
-        with open(path + 'propressed', 'w', encoding='utf-8') as f:
-            for data in all_datas:
-                f.write(json.dumps(data, ensure_ascii=False) + '\n')
+    #             try:
+    #                 entities_pre, triggers_pre, args_pre = evaluation.shift_reduce(json.loads(line['predict'])['actions'], sentence)
+    #             except Exception as e:
+    #                 print(e)
+    #                 entities_pre, triggers_pre, args_pre =[], [], []
+    #             for entity in entities_pre:
+    #                 all_data['predict']['ent'].append({'type':entity[2], 'text':' '.join(sentence.split()[entity[0]:(entity[1]+1)]), 'span':[str(entity[0]), str(entity[1])]})
+    #             for trigger in triggers_pre:
+    #                 if trigger[0] >= len(sentence.split()):
+    #                     continue
+    #                 tmp = dict()
+    #                 tmp['event_type'] = trigger[1]
+    #                 tmp['trigger'] = {'text':sentence.split()[trigger[0]], 'span':str(trigger[0])}
+    #                 tmp['args'] = []
+    #                 for arg in args_pre:
+    #                     if trigger[0] == arg[2]:
+    #                         tmp['args'].append({'role':arg[-1], 'text':' '.join(sentence.split()[arg[0]:(arg[1] + 1)]), 'span':[str(arg[0]), str(arg[1])]})
+    #                 all_data['predict']['event'].append(tmp)
+    #             all_data['label'] = json.dumps(all_data['label'], ensure_ascii=False)
+    #             all_data['predict'] = json.dumps(all_data['predict'], ensure_ascii=False)
+    #             all_datas.append(all_data)
+    #             # print(all_data)
+    #             # stop
+    #     with open(path + 'propressed', 'w', encoding='utf-8') as f:
+    #         for data in all_datas:
+    #             f.write(json.dumps(data, ensure_ascii=False) + '\n')
